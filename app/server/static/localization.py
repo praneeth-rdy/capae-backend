@@ -1,0 +1,7 @@
+EXCEPTION_FORBIDDEN_ACCESS = 'Access denied'
+EXCEPTION_UNAUTHORIZED_ACCESS = 'Unauthorised access'
+EXCEPTION_USER_NOT_FOUND = 'User not found'
+EXCEPTION_TOKEN_INVALID = 'Invalid access token'
+EXCEPTION_TOKEN_EXPIRED = 'Access token expired'
+EXCEPTION_AUTHORIZATION_HEADER_INVALID = 'Authorization header invalid'
+EXCEPTION_AUTHORIZATION_TOKEN_NOT_FOUND = 'Authorization token not found'
