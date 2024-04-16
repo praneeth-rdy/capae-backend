@@ -1,6 +1,14 @@
-# from bson import ObjectId
+import os
+import shutil
 
 from fastapi import Request, UploadFile
+
+from app.server.utils.video_utils import detect_video_and_set_db
+from app.server.static.constants import MEDIA_PATH, INPUT_FILE_PATH
+from app.server.config.databases import db
+from app.server.models.parsed_video import ParsedVideo
+
+parsed_video_collection = db.get_collection('parsed_videos')
 
 
 async def temporary(name: str, request: Request):
@@ -16,8 +24,38 @@ async def temporary(name: str, request: Request):
     return {}
 
 
-async def process_video(file: UploadFile, request: Request):
-    return {'filename': file.filename}
+async def process_video(video_file: UploadFile, request: Request):
+    # create the mongodb entry
+    new_video = ParsedVideo()
+    created_entry = await parsed_video_collection.insert_one(new_video.dict())
+    created_id = str(created_entry.inserted_id)
+    new_folder_path = os.path.join('app/', MEDIA_PATH, created_id)
+
+    os.makedirs(new_folder_path, exist_ok=True)
+    new_video_path = os.path.join(new_folder_path, INPUT_FILE_PATH)
+
+    # save the input video in the folder with uuid
+    with open(new_video_path, 'wb') as buffer:
+        shutil.copyfileobj(video_file.file, buffer)
+
+    await detect_video_and_set_db(created_id)
+
+    return {'filename': video_file.filename}
+
+
+async def get_parsed_videos(request: Request):
+    """
+    Fetches and returns all the parsed videos saved in the db
+
+    Args: None
+    Returns:
+        - Required JSON Data
+    """
+    documents = await parsed_video_collection.find({}).to_list(length=None)
+    for doc in documents:
+        if '_id' in doc:
+            doc['_id'] = str(doc['_id'])
+    return documents
 
 
 # async def update_target_info(entry_id: str, data: UpdateParsedResumeActualInfo, request: Request):

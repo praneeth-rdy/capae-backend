@@ -25,6 +25,8 @@ scripts/*
 tests/*
 scripts/*
 out/*
+media/
+data/
 
 # Python Model
 Train.pth
