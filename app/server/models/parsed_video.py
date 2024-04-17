@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -11,6 +12,7 @@ class ParsedVideo(BaseModel):
 
     name: str
     status: Status = Status.IN_PROCESS  # in-process, done, error
+    runtime: Optional[str] = None
     createdAt: datetime
 
 
@@ -19,6 +21,7 @@ class UpdateOutputVideoSuccess(BaseModel):
     Model to update the output of the parsed-video
     """
 
+    runtime: str
     status: Status = Status.DONE
 
 

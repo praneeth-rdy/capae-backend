@@ -1,6 +1,7 @@
 import cv2
+import ffmpeg
 
-# import time
+import time
 import os
 from bson import ObjectId
 
@@ -12,6 +13,7 @@ from detecto.utils import normalize_transform
 from app.server.static.constants import MEDIA_PATH, INPUT_FILE_PATH, OUTPUT_FILE_PATH
 from app.server.models.parsed_video import UpdateOutputVideoSuccess, UpdateOutputVideoError
 from app.server.config.databases import db
+from app.server.utils.date_utils import get_formatted_time
 
 parsed_video_collection = db.get_collection('parsed_videos')
 
@@ -50,6 +52,7 @@ def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6)
         >>> detect_video(model, 'input_vid.mp4', 'output_vid.avi', score_filter=0.7)
     """
 
+    temp_file = 'temp.mp4'
     # Read in the video
     video = cv2.VideoCapture(input_file)
 
@@ -63,7 +66,7 @@ def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6)
 
     # The VideoWriter with which we'll write our video with the boxes and labels
     # Parameters: filename, fourcc, fps, frame_size
-    out = cv2.VideoWriter(output_file, cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_width, frame_height))
+    out = cv2.VideoWriter(temp_file, cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_width, frame_height))
 
     # Transform to apply on individual frames of the video
     transform_frame = transforms.Compose([transforms.ToPILImage(), transforms.Resize(scaled_size), transforms.ToTensor(), normalize_transform()])  # TODO Issue #16
@@ -84,8 +87,8 @@ def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6)
             break
 
         # The transformed frame is what we'll feed into our model
-        transformed_frame = transform_frame(frame)
-        # transformed_frame = frame  # TODO: Issue #16
+        # transformed_frame = transform_frame(frame)
+        transformed_frame = frame  # TODO: Issue #16
         predictions = model.predict(transformed_frame)
 
         # Add the top prediction of each class to the frame
@@ -120,6 +123,8 @@ def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6)
 
     # Close all the frames
     cv2.destroyAllWindows()
+    ffmpeg.input(temp_file).output(output_file).run()
+    os.remove(temp_file)
 
 
 async def detect_video_and_set_db(entry_id):
@@ -127,8 +132,10 @@ async def detect_video_and_set_db(entry_id):
     output_file = os.path.join('app/', MEDIA_PATH, entry_id, OUTPUT_FILE_PATH)
     update_data = None
     try:
+        start_time = time.time()
         detect_video(input_file=input_file, output_file=output_file)
-        update_data = UpdateOutputVideoSuccess()
+        duration = get_formatted_time(time.time() - start_time)
+        update_data = UpdateOutputVideoSuccess(runtime=duration)
     except:
         update_data = UpdateOutputVideoError()
     updated_entry = await parsed_video_collection.find_one_and_update({'_id': ObjectId(entry_id)}, {'$set': update_data.dict()})
