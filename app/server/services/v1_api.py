@@ -4,6 +4,7 @@ import shutil
 from fastapi import Request, UploadFile
 
 from app.server.utils.video_utils import detect_video_and_set_db
+from app.server.utils.date_utils import get_current_datetime
 from app.server.static.constants import MEDIA_PATH, INPUT_FILE_PATH
 from app.server.config.databases import db
 from app.server.models.parsed_video import ParsedVideo
@@ -24,9 +25,10 @@ async def temporary(name: str, request: Request):
     return {}
 
 
-async def process_video(video_file: UploadFile, request: Request):
+async def process_video(name: str, video_file: UploadFile, request: Request):
+    current_datetime = get_current_datetime()
     # create the mongodb entry
-    new_video = ParsedVideo()
+    new_video = ParsedVideo(name=name, createdAt=current_datetime)
     created_entry = await parsed_video_collection.insert_one(new_video.dict())
     created_id = str(created_entry.inserted_id)
     new_folder_path = os.path.join('app/', MEDIA_PATH, created_id)
@@ -53,8 +55,7 @@ async def get_parsed_videos(request: Request):
     """
     documents = await parsed_video_collection.find({}).to_list(length=None)
     for doc in documents:
-        if '_id' in doc:
-            doc['_id'] = str(doc['_id'])
+        doc['_id'] = str(doc['_id'])
     return documents
 
 

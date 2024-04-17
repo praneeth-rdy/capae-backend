@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import datetime
 
 from app.server.static.enums import Status
 
@@ -8,7 +9,9 @@ class ParsedVideo(BaseModel):
     Container for a single record of parsed-video
     """
 
+    name: str
     status: Status = Status.IN_PROCESS  # in-process, done, error
+    createdAt: datetime
 
 
 class UpdateOutputVideoSuccess(BaseModel):

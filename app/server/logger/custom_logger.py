@@ -9,12 +9,12 @@ from app.server.config import config
 
 def logging_api_requests(request: Request, response: Response):
     logs = f'{request.client.host}:{request.client.port} {request.method} {request.url} {response.status_code}'
-    logs += '\n\n' + '*********Request Headers Start***********\n'
-    logs += '\n'.join(f'{name} : {value}' for name, value in request.headers.items())
-    logs += '\n' + '*********Request Headers End***********\n'
-    logs += '\n\n' + '*********Response Headers Start***********\n'
-    logs += '\n'.join(f'{name} : {value}' for name, value in response.headers.items())
-    logs += '\n' + '*********Response Headers End***********\n'
+    # logs += '\n\n' + '*********Request Headers Start***********\n'
+    # logs += '\n'.join(f'{name} : {value}' for name, value in request.headers.items())
+    # logs += '\n' + '*********Request Headers End***********\n'
+    # logs += '\n\n' + '*********Response Headers Start***********\n'
+    # logs += '\n'.join(f'{name} : {value}' for name, value in response.headers.items())
+    # logs += '\n' + '*********Response Headers End***********\n'
     logger.debug(logs)
 
 

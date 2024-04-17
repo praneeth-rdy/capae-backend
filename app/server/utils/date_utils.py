@@ -27,7 +27,7 @@ def get_timestamp(expires_delta: timedelta = timedelta(hours=1)) -> int:
     return int(timestamp_seconds * 1000)
 
 
-def get_current_date_time():
+def get_current_datetime() -> datetime:
     return datetime.datetime.now(timezone.utc)
 
 

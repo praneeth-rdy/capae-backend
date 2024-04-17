@@ -1,4 +1,5 @@
 from fastapi import APIRouter, FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -53,9 +54,13 @@ async def openapi():
     return get_openapi(title=app.title, version=app.version, tags=app.openapi_tags, routes=app.routes)
 
 
+# Mount media route
+app.mount('/media', StaticFiles(directory='app/media'), name='media')
+
+
 @app.on_event('startup')
 async def startup_event():
-    logger.debug(f'App startup: {str(date_utils.get_current_date_time())}')
+    logger.debug(f'App startup: {str(date_utils.get_current_datetime())}')
     # await mongo_utils.create_indexes()
     # Count the number of APIs
     num_apis = len(app.routes)
@@ -64,7 +69,7 @@ async def startup_event():
 
 @app.on_event('shutdown')
 def shutdown_event():
-    logger.debug(f'App shutdown: {str(date_utils.get_current_date_time())}')
+    logger.debug(f'App shutdown: {str(date_utils.get_current_datetime())}')
 
 
 @app.get('/', tags=['Root'], include_in_schema=False)
