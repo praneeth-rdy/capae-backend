@@ -5,6 +5,9 @@ import time
 import os
 from bson import ObjectId
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 from torchvision import transforms
 from detecto import core
 from tqdm import tqdm
@@ -20,7 +23,7 @@ parsed_video_collection = db.get_collection('parsed_videos')
 model = core.Model.load('app/data/Train.pth', ['1', '2', '3', '4', '5'])
 
 
-def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6):
+def detect_video(input_file, output_file, temp_file, model=model, fps=30, score_filter=0.6):
     """Takes in a video and produces an output video with object detection
     run on it (i.e. displays boxes around detected objects in real-time).
     Output videos should have the .avi file extension. Note: some apps,
@@ -52,7 +55,6 @@ def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6)
         >>> detect_video(model, 'input_vid.mp4', 'output_vid.avi', score_filter=0.7)
     """
 
-    temp_file = 'temp.mp4'
     # Read in the video
     video = cv2.VideoCapture(input_file)
 
@@ -130,10 +132,13 @@ def detect_video(input_file, output_file, model=model, fps=30, score_filter=0.6)
 async def detect_video_and_set_db(entry_id):
     input_file = os.path.join('app/', MEDIA_PATH, entry_id, INPUT_FILE_PATH)
     output_file = os.path.join('app/', MEDIA_PATH, entry_id, OUTPUT_FILE_PATH)
+    temp_file = os.path.join('app/', MEDIA_PATH, entry_id, 'temp.mp4')
     update_data = None
     try:
         start_time = time.time()
-        detect_video(input_file=input_file, output_file=output_file)
+        with ThreadPoolExecutor() as executor:
+            await asyncio.get_event_loop().run_in_executor(executor, detect_video, input_file, output_file, temp_file)
+        # await detect_video(input_file=input_file, output_file=output_file)
         duration = get_formatted_time(time.time() - start_time)
         update_data = UpdateOutputVideoSuccess(runtime=duration)
     except:
