@@ -53,7 +53,7 @@ async def get_parsed_videos(request: Request):
     Returns:
         - Required JSON Data
     """
-    documents = await parsed_video_collection.find({}).to_list(length=None)
+    documents = await parsed_video_collection.find({}).sort('createdAt', -1).to_list(length=None)
     for doc in documents:
         doc['_id'] = str(doc['_id'])
     return documents

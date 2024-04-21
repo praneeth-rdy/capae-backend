@@ -1,5 +1,6 @@
 import cv2
-import ffmpeg
+
+# import ffmpeg
 
 import time
 import os
@@ -68,7 +69,7 @@ def detect_video(input_file, output_file, temp_file, model=model, fps=30, score_
 
     # The VideoWriter with which we'll write our video with the boxes and labels
     # Parameters: filename, fourcc, fps, frame_size
-    out = cv2.VideoWriter(temp_file, cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_width, frame_height))
+    out = cv2.VideoWriter(output_file, cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_width, frame_height))
 
     # Transform to apply on individual frames of the video
     transform_frame = transforms.Compose([transforms.ToPILImage(), transforms.Resize(scaled_size), transforms.ToTensor(), normalize_transform()])  # TODO Issue #16
@@ -125,8 +126,132 @@ def detect_video(input_file, output_file, temp_file, model=model, fps=30, score_
 
     # Close all the frames
     cv2.destroyAllWindows()
-    ffmpeg.input(temp_file).output(output_file).run()
-    os.remove(temp_file)
+    # ffmpeg.input(temp_file).output(output_file).run()
+    # os.remove(temp_file)
+
+
+def detect_with_tracker(input_file, output_file, temp_file, model=model, fps=30, score_filter=0.6):
+    # Read in the video
+    video = cv2.VideoCapture(input_file)
+
+    # Video frame dimensions
+    frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Scale down frames when passing into model for faster speeds
+    scaled_size = 800
+    scale_down_factor = min(frame_height, frame_width) / scaled_size
+
+    # The VideoWriter with which we'll write our video with the boxes and labels
+    # Parameters: filename, fourcc, fps, frame_size
+    out = cv2.VideoWriter(output_file, cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_width, frame_height))
+
+    # Transform to apply on individual frames of the video
+    transform_frame = transforms.Compose([transforms.ToPILImage(), transforms.Resize(scaled_size), transforms.ToTensor(), normalize_transform()])  # TODO Issue #16
+
+    total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Create a tqdm progress bar with the total number of frames
+    pbar = tqdm(total=total_frames, desc='Processing Frames')
+
+    # Initialize trackers list
+    trackers = []
+    num_objects = -1
+    max_cnt = 0
+    COUNT_UNTIL = 3
+    cur_cnt = 0
+
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
+
+        # Run object detection until 5 objects are detected
+        if num_objects == -1:
+            # print("Counting Objects")
+            transformed_frame = frame  # TODO: Apply transformation
+            predictions = model.predict(transformed_frame)
+            cnt = 0
+
+            # Initialize trackers for up to 5 detected objects
+            for label, box, score in zip(*predictions):
+                if score < score_filter:
+                    continue
+                bbox = (int(box[0]), int(box[1]), int(box[2] - box[0]), int(box[3] - box[1]))
+
+                ## draw rectangle
+                cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 0), 2)  # Green rectangle
+                cv2.putText(frame, f'{label}: {round(score.item(), 2)}', (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+
+                cnt += 1
+
+            max_cnt = max(max_cnt, cnt)
+            cur_cnt += 1
+
+            if cur_cnt >= COUNT_UNTIL:
+                #   print("Objects Found: ",max_cnt)
+                num_objects = max_cnt
+                cur_cnt = 0
+                max_cnt = 0
+        elif len(trackers) < num_objects:
+            trackers = []
+
+            transformed_frame = frame  # TODO: Apply transformation
+            predictions = model.predict(transformed_frame)
+
+            # Initialize trackers for up to 5 detected objects
+            for label, box, score in zip(*predictions):
+                if score < score_filter:
+                    continue
+                bbox = (int(box[0]), int(box[1]), int(box[2] - box[0]), int(box[3] - box[1]))
+
+                ## draw rectangle
+                cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 0), 2)  # Green rectangle
+                cv2.putText(frame, f'{label}: {round(score.item(), 2)}', (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+
+                ## create tracker for this object
+                tracker = cv2.TrackerCSRT_create()
+                tracker.init(frame, bbox)
+                trackers.append([tracker, label, score.item()])
+                if len(trackers) == num_objects:
+                    break
+            # print("Objects Detected: ",len(trackers))
+        else:
+            # Update existing trackers
+            flag = 1
+            for tracker, label, score in trackers:
+                ret, bbox = tracker.update(frame)
+                if not ret:
+                    # If tracker fails, reset all trackers and break
+                    flag = 0
+                else:
+                    # Tracking successful, draw bounding box
+                    xmin, ymin, w, h = (int(coord) for coord in bbox)
+                    cv2.rectangle(frame, (xmin, ymin), (xmin + w, ymin + h), (0, 255, 0), 2)
+                    cv2.putText(frame, f'{label}: {round(score, 2)}', (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+
+            if flag == 0:
+                #   print("Tracking failed")
+                trackers = []
+                num_objects = -1
+                cur_cnt = 0
+                max_cnt = 0
+
+        # Write frame to video
+        out.write(frame)
+        pbar.update(1)
+
+        # Exit loop if 'q' key is pressed
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+
+    # Release resources
+    video.release()
+    out.release()
+    cv2.destroyAllWindows()
+    # ffmpeg.input(temp_file).output(output_file).run()
+    # os.remove(temp_file)
 
 
 async def detect_video_and_set_db(entry_id):
@@ -137,11 +262,12 @@ async def detect_video_and_set_db(entry_id):
     try:
         start_time = time.time()
         with ThreadPoolExecutor() as executor:
-            await asyncio.get_event_loop().run_in_executor(executor, detect_video, input_file, output_file, temp_file)
+            await asyncio.get_event_loop().run_in_executor(executor, detect_with_tracker, input_file, output_file, temp_file)
         # await detect_video(input_file=input_file, output_file=output_file)
         duration = get_formatted_time(time.time() - start_time)
         update_data = UpdateOutputVideoSuccess(runtime=duration)
-    except:
+    except Exception as e:
+        print(e)
         update_data = UpdateOutputVideoError()
     updated_entry = await parsed_video_collection.find_one_and_update({'_id': ObjectId(entry_id)}, {'$set': update_data.dict()})
     return updated_entry
